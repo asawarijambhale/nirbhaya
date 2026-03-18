@@ -153,6 +153,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:http/http.dart' as http;
 import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
 import 'screens/home_screen.dart';
@@ -168,13 +170,30 @@ import 'screens/blackbanana_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/complete_profile_screen.dart';
 import 'screens/pin_screen.dart';
+import 'features/chatbot/services/gemini_client.dart';
+import 'features/chatbot/services/chat_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  runApp(const NirbhayaApp());
+  // Load Gemini API key from environment variable (pass via --dart-define=GEMINI_API_KEY=...)
+  const geminiApiKey = String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
+
+  final chatService = ChatServiceImpl(
+    geminiClient: GeminiClientImpl(
+      apiKey: geminiApiKey,
+      httpClient: http.Client(),
+    ),
+  );
+
+  runApp(
+    ChangeNotifierProvider<ChatService>.value(
+      value: chatService,
+      child: const NirbhayaApp(),
+    ),
+  );
 }
 
 class NirbhayaApp extends StatelessWidget {
