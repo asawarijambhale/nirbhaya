@@ -172,6 +172,7 @@ import 'screens/complete_profile_screen.dart';
 import 'screens/pin_screen.dart';
 import 'features/chatbot/services/gemini_client.dart';
 import 'features/chatbot/services/chat_service.dart';
+import 'features/panic_whisper/services/whisper_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -187,6 +188,9 @@ void main() async {
       httpClient: http.Client(),
     ),
   );
+
+  // Initialize Panic Whisper Detection (restores saved state on app start)
+  await WhisperService().init();
 
   runApp(
     ChangeNotifierProvider<ChatService>.value(

@@ -134,9 +134,27 @@ class SignupScreen extends StatelessWidget {
     // 🔥 Go to Login Screen
     Navigator.pushReplacementNamed(context, '/login');
 
+  } on FirebaseAuthException catch (e) {
+    String message;
+    switch (e.code) {
+      case 'email-already-in-use':
+        message = 'This email is already registered. Please login instead.';
+        break;
+      case 'weak-password':
+        message = 'Password is too weak. Use at least 6 characters.';
+        break;
+      case 'invalid-email':
+        message = 'Please enter a valid email address.';
+        break;
+      default:
+        message = e.message ?? 'Signup failed. Please try again.';
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   } catch (e) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(e.toString())),
+      const SnackBar(content: Text('Something went wrong. Please try again.')),
     );
   }
 },

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../features/panic_whisper/panic_whisper_settings.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -10,7 +11,6 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _enableCameraLocation = true;
   bool _enableDecoyMode = false;
-  bool _whisperMode = false;
   bool _addSosContact = true;
   bool _enableNotifications = true;
   bool _enableCamMicAccess = false;
@@ -32,21 +32,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
         padding: const EdgeInsets.all(16),
         child: ListView(
           children: [
-            _buildSettingCard("Enable Camera Location", _enableCameraLocation,
-                (val) => setState(() => _enableCameraLocation = val), royalBlue),
-            _buildSettingCard("Enable Decoy App Mode", _enableDecoyMode,
-                (val) => setState(() => _enableDecoyMode = val), royalBlue),
-            _buildSettingCard("Change Code for Whisper Mode", _whisperMode,
-                (val) => setState(() => _whisperMode = val), royalBlue),
-            _buildSettingCard("Add SOS Contact", _addSosContact,
-                (val) => setState(() => _addSosContact = val), royalBlue),
-            _buildSettingCard("Enable Notifications", _enableNotifications,
-                (val) => setState(() => _enableNotifications = val), royalBlue),
             _buildSettingCard(
-                "Enable Camera & Microphone Access",
-                _enableCamMicAccess,
-                (val) => setState(() => _enableCamMicAccess = val),
-                royalBlue),
+              "Enable Camera Location",
+              _enableCameraLocation,
+              (val) => setState(() => _enableCameraLocation = val),
+              royalBlue,
+            ),
+            _buildSettingCard(
+              "Enable Decoy App Mode",
+              _enableDecoyMode,
+              (val) => setState(() => _enableDecoyMode = val),
+              royalBlue,
+            ),
+            _buildSettingCard(
+              "Add SOS Contact",
+              _addSosContact,
+              (val) => setState(() => _addSosContact = val),
+              royalBlue,
+            ),
+            _buildSettingCard(
+              "Enable Notifications",
+              _enableNotifications,
+              (val) => setState(() => _enableNotifications = val),
+              royalBlue,
+            ),
+            _buildSettingCard(
+              "Enable Camera & Microphone Access",
+              _enableCamMicAccess,
+              (val) => setState(() => _enableCamMicAccess = val),
+              royalBlue,
+            ),
+
+            // ── Panic Whisper Detection ──────────────────────────────────
+            const PanicWhisperSettings(),
           ],
         ),
       ),
@@ -54,21 +72,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildSettingCard(
-      String label, bool value, Function(bool) onChanged, Color royalBlue) {
+    String label,
+    bool value,
+    Function(bool) onChanged,
+    Color royalBlue,
+  ) {
     return Card(
       elevation: 5,
       shadowColor: royalBlue.withOpacity(0.3),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       margin: const EdgeInsets.symmetric(vertical: 10),
       child: ListTile(
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         title: Text(
           label,
-          style: const TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w600,
-          ),
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
         ),
         trailing: Switch(
           activeColor: Colors.white,

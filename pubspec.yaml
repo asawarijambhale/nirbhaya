@@ -52,6 +52,7 @@ dependencies:
   permission_handler: ^11.3.1
   uuid: ^4.0.0
   android_intent_plus: ^6.0.0
+  shared_preferences: ^2.2.3
 
   # Chatbot feature dependencies
   provider: ^6.1.1
