@@ -173,6 +173,8 @@ import 'screens/pin_screen.dart';
 import 'features/chatbot/services/gemini_client.dart';
 import 'features/chatbot/services/chat_service.dart';
 import 'features/panic_whisper/services/whisper_service.dart';
+import 'features/danger_alert/services/danger_prediction_service.dart';
+import 'features/danger_alert/widgets/danger_alert_banner.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -192,9 +194,17 @@ void main() async {
   // Initialize Panic Whisper Detection (restores saved state on app start)
   await WhisperService().init();
 
+  // Initialize Danger Prediction Service
+  final dangerService = DangerPredictionService();
+  await dangerService.init();
+
   runApp(
-    ChangeNotifierProvider<ChatService>.value(
-      value: chatService,
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<ChatService>.value(value: chatService),
+        ChangeNotifierProvider<DangerPredictionService>.value(
+            value: dangerService),
+      ],
       child: const NirbhayaApp(),
     ),
   );
@@ -212,6 +222,8 @@ class NirbhayaApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
+      // Wrap every screen with DangerAlertBanner AFTER MaterialApp provides Directionality
+      builder: (context, child) => DangerAlertBanner(child: child ?? const SizedBox()),
       initialRoute: '/login',
       routes: {
         '/login': (context) => const LoginScreen(),

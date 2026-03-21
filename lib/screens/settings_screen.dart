@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../features/panic_whisper/panic_whisper_settings.dart';
+import '../features/danger_alert/danger_alert_settings.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -65,6 +66,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             // ── Panic Whisper Detection ──────────────────────────────────
             const PanicWhisperSettings(),
+
+            // ── Predictive Danger Alerts ─────────────────────────────────
+            const DangerAlertSettings(),
           ],
         ),
       ),
