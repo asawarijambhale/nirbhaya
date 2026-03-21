@@ -2,7 +2,6 @@ package com.example.nirbhaya
 
 import android.app.PendingIntent
 import android.content.Intent
-import android.content.SharedPreferences
 import android.telephony.SmsManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -50,7 +49,9 @@ class MainActivity : FlutterActivity() {
                     // Flutter → Native: start the foreground service
                     "startService" -> {
                         val codeword = call.argument<String>("codeword") ?: ""
+                        val contacts = call.argument<String>("contacts") ?: ""
                         saveCodeword(codeword)
+                        saveContacts(contacts)
                         WhisperForegroundService.start(this)
                         result.success(true)
                     }
@@ -65,6 +66,12 @@ class MainActivity : FlutterActivity() {
                         saveCodeword(codeword)
                         result.success(true)
                     }
+                    // Flutter → Native: update contacts list
+                    "updateContacts" -> {
+                        val contacts = call.argument<String>("contacts") ?: ""
+                        saveContacts(contacts)
+                        result.success(true)
+                    }
                     else -> result.notImplemented()
                 }
             }
@@ -72,11 +79,15 @@ class MainActivity : FlutterActivity() {
 
     /** Persist codeword in SharedPreferences so the service can read it. */
     private fun saveCodeword(codeword: String) {
-        val prefs: SharedPreferences = getSharedPreferences(
-            WhisperForegroundService.PREFS_NAME, MODE_PRIVATE
-        )
-        prefs.edit().putString(WhisperForegroundService.KEY_CODEWORD,
-            codeword.trim().lowercase()).apply()
+        getSharedPreferences(WhisperForegroundService.PREFS_NAME, MODE_PRIVATE)
+            .edit().putString(WhisperForegroundService.KEY_CODEWORD,
+                codeword.trim().lowercase()).apply()
+    }
+
+    /** Persist comma-separated phone numbers so the service can send SMS natively. */
+    private fun saveContacts(contacts: String) {
+        getSharedPreferences(WhisperForegroundService.PREFS_NAME, MODE_PRIVATE)
+            .edit().putString(WhisperForegroundService.KEY_CONTACTS, contacts).apply()
     }
 
     // ── SMS helper (unchanged) ────────────────────────────────────────────────

@@ -1,9 +1,10 @@
-﻿package com.example.nirbhaya
+package com.example.nirbhaya
 
 import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.location.Location
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -11,12 +12,29 @@ import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.telephony.SmsManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.plugin.common.MethodChannel
 import java.util.Locale
 
+/**
+ * Foreground service: listens for panic codeword, triggers SOS natively.
+ * Does NOT depend on Flutter engine being active.
+ *
+ * Fixes:
+ *   1. FusedLocationProviderClient for accurate background/locked-screen location
+ *   2. Fallback to last known location if fresh fetch times out
+ *   3. 15s cooldown prevents duplicate SOS
+ *   4. SMS sent ONLY to saved emergency contacts (comma-separated from prefs)
+ *   5. foregroundServiceType includes "location" in manifest
+ */
 class WhisperForegroundService : Service() {
 
     companion object {
@@ -27,10 +45,13 @@ class WhisperForegroundService : Service() {
         const val ACTION_STOP     = "ACTION_STOP_WHISPER"
         const val PREFS_NAME      = "whisper_prefs"
         const val KEY_CODEWORD    = "panic_codeword"
+        const val KEY_CONTACTS    = "emergency_contacts"
         const val FLUTTER_CHANNEL = "com.nirbhaya/whisper"
+        const val COOLDOWN_MS     = 15_000L
 
         fun start(context: Context) {
-            val intent = Intent(context, WhisperForegroundService::class.java).setAction(ACTION_START)
+            val intent = Intent(context, WhisperForegroundService::class.java)
+                .setAction(ACTION_START)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {
@@ -40,7 +61,8 @@ class WhisperForegroundService : Service() {
 
         fun stop(context: Context) {
             context.startService(
-                Intent(context, WhisperForegroundService::class.java).setAction(ACTION_STOP)
+                Intent(context, WhisperForegroundService::class.java)
+                    .setAction(ACTION_STOP)
             )
         }
     }
@@ -48,6 +70,14 @@ class WhisperForegroundService : Service() {
     private var speechRecognizer: SpeechRecognizer? = null
     private var isListening = false
     private val handler = Handler(Looper.getMainLooper())
+    private var lastTriggerTime = 0L
+
+    // FusedLocationProviderClient — accurate even in background / screen-off
+    private val fusedLocationClient by lazy {
+        LocationServices.getFusedLocationProviderClient(this)
+    }
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────
 
     override fun onCreate() {
         super.onCreate()
@@ -69,16 +99,23 @@ class WhisperForegroundService : Service() {
     override fun onDestroy() {
         stopRecognition()
         super.onDestroy()
+        Log.d(TAG, "Service destroyed")
     }
 
+    // ── Speech Recognition ────────────────────────────────────────────────
+
     private fun startRecognition() {
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) return
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            Log.w(TAG, "Speech recognition not available on this device")
+            return
+        }
         speechRecognizer?.destroy()
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
             setRecognitionListener(recognitionListener)
         }
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L)
@@ -87,6 +124,7 @@ class WhisperForegroundService : Service() {
         }
         speechRecognizer?.startListening(intent)
         isListening = true
+        Log.d(TAG, "Recognition started")
     }
 
     private fun stopRecognition() {
@@ -101,17 +139,145 @@ class WhisperForegroundService : Service() {
         handler.postDelayed({ if (!isListening) startRecognition() }, 1500L)
     }
 
+    // ── Keyword Detection + Cooldown ──────────────────────────────────────
+
     private fun getCodeword(): String {
-        val prefs: SharedPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getString(KEY_CODEWORD, "") ?: ""
+        return getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_CODEWORD, "") ?: ""
     }
 
     private fun checkAndTrigger(spoken: String) {
         val codeword = getCodeword()
         if (codeword.isBlank()) return
-        if (KeywordDetector.matches(spoken, codeword)) {
-            Log.d(TAG, "CODEWORD DETECTED: $spoken")
+        if (!KeywordDetector.matches(spoken, codeword)) return
+
+        val now = System.currentTimeMillis()
+        if (now - lastTriggerTime < COOLDOWN_MS) {
+            Log.d(TAG, "Ignored due to cooldown. Spoken: $spoken")
+            return
+        }
+
+        Log.d(TAG, "Keyword Detected: $spoken")
+        lastTriggerTime = now
+        triggerSOSNatively()
+    }
+
+    // ── Native SOS ────────────────────────────────────────────────────────
+
+    private fun triggerSOSNatively() {
+        Log.d(TAG, "SOS Triggered")
+
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val contactsRaw = prefs.getString(KEY_CONTACTS, "") ?: ""
+        if (contactsRaw.isBlank()) {
+            Log.w(TAG, "No contacts saved — cannot send SOS")
             notifyFlutter()
+            return
+        }
+
+        // Deduplicate phone numbers
+        val phones = contactsRaw.split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+
+        Log.d(TAG, "Fetching location...")
+
+        // Try fresh location first (5s timeout), fallback to last known
+        fetchFreshLocation(
+            onSuccess = { location ->
+                val mapsLink = "https://maps.google.com/?q=${location.latitude},${location.longitude}"
+                Log.d(TAG, "Location fetched: ${location.latitude}, ${location.longitude}")
+                sendSMSToContacts(phones, mapsLink)
+            },
+            onFallback = {
+                Log.d(TAG, "Fallback location used")
+                val fallback = getLastKnownLocation()
+                val mapsLink = if (fallback != null)
+                    "https://maps.google.com/?q=${fallback.latitude},${fallback.longitude}"
+                else
+                    "Location unavailable"
+                sendSMSToContacts(phones, mapsLink)
+            }
+        )
+
+        notifyFlutter()
+    }
+
+    /**
+     * Requests a single fresh high-accuracy location via FusedLocationProviderClient.
+     * Times out after 5 seconds and calls onFallback if no fix is obtained.
+     */
+    private fun fetchFreshLocation(
+        onSuccess: (Location) -> Unit,
+        onFallback: () -> Unit
+    ) {
+        try {
+            val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000L)
+                .setMaxUpdates(1)
+                .setWaitForAccurateLocation(false)
+                .build()
+
+            val callback = object : LocationCallback() {
+                override fun onLocationResult(result: LocationResult) {
+                    fusedLocationClient.removeLocationUpdates(this)
+                    handler.removeCallbacksAndMessages("loc_timeout")
+                    result.lastLocation?.let { onSuccess(it) } ?: onFallback()
+                }
+            }
+
+            fusedLocationClient.requestLocationUpdates(request, callback, Looper.getMainLooper())
+
+            // 5-second timeout — fall back to last known if no fix
+            handler.postAtTime({
+                fusedLocationClient.removeLocationUpdates(callback)
+                onFallback()
+            }, "loc_timeout", android.os.SystemClock.uptimeMillis() + 5_000L)
+
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Location permission denied: ${e.message}")
+            onFallback()
+        } catch (e: Exception) {
+            Log.w(TAG, "fetchFreshLocation error: ${e.message}")
+            onFallback()
+        }
+    }
+
+    /** Last-known location from Fused provider as fallback. */
+    private fun getLastKnownLocation(): Location? {
+        return try {
+            var result: Location? = null
+            fusedLocationClient.lastLocation.addOnSuccessListener { loc -> result = loc }
+            // Give it a brief moment (synchronous best-effort)
+            Thread.sleep(500)
+            result
+        } catch (e: Exception) {
+            Log.w(TAG, "getLastKnownLocation error: ${e.message}")
+            null
+        }
+    }
+
+    private fun sendSMSToContacts(phones: List<String>, mapsLink: String) {
+        val message = "SOS! I need help. My location: $mapsLink"
+        val smsManager = getSmsManager()
+
+        for (phone in phones) {
+            try {
+                Log.d(TAG, "Sending SOS to: $phone")
+                smsManager.sendTextMessage(phone, null, message, null, null)
+                Log.d(TAG, "SMS sent to $phone")
+            } catch (e: Exception) {
+                Log.e(TAG, "SMS failed to $phone: ${e.message}")
+            }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun getSmsManager(): SmsManager {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            getSystemService(SmsManager::class.java)
+        } else {
+            SmsManager.getDefault()
         }
     }
 
@@ -123,6 +289,8 @@ class WhisperForegroundService : Service() {
         }
     }
 
+    // ── RecognitionListener ───────────────────────────────────────────────
+
     private val recognitionListener = object : RecognitionListener {
         override fun onReadyForSpeech(params: android.os.Bundle?) {}
         override fun onBeginningOfSpeech() {}
@@ -132,13 +300,17 @@ class WhisperForegroundService : Service() {
         override fun onEvent(eventType: Int, params: android.os.Bundle?) {}
 
         override fun onPartialResults(partialResults: android.os.Bundle?) {
-            partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                ?.firstOrNull()?.let { checkAndTrigger(it) }
+            partialResults
+                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                ?.firstOrNull()
+                ?.let { checkAndTrigger(it) }
         }
 
         override fun onResults(results: android.os.Bundle?) {
-            results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                ?.firstOrNull()?.let { checkAndTrigger(it) }
+            results
+                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                ?.firstOrNull()
+                ?.let { checkAndTrigger(it) }
             isListening = false
             scheduleRestart()
         }
@@ -152,21 +324,29 @@ class WhisperForegroundService : Service() {
         }
     }
 
+    // ── Notification ──────────────────────────────────────────────────────
+
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(CHANNEL_ID, "Safety Monitor", NotificationManager.IMPORTANCE_MIN).apply {
+            val channel = NotificationChannel(
+                CHANNEL_ID, "Safety Monitor", NotificationManager.IMPORTANCE_MIN
+            ).apply {
                 description = "Nirbhaya safety monitoring"
                 setSound(null, null)
                 enableVibration(false)
                 setShowBadge(false)
             }
-            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+            getSystemService(NotificationManager::class.java)
+                .createNotificationChannel(channel)
         }
     }
 
     private fun buildNotification(): Notification {
         val openIntent = packageManager.getLaunchIntentForPackage(packageName)?.let {
-            PendingIntent.getActivity(this, 0, it, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            PendingIntent.getActivity(
+                this, 0, it,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
         }
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Nirbhaya Protection Active")

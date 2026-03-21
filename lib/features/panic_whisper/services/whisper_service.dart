@@ -1,24 +1,20 @@
-import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../../../services/sos_service.dart';
 import 'whisper_prefs.dart';
 
-/// Singleton that bridges Flutter ↔ Android WhisperForegroundService.
+/// Bridges Flutter ↔ Android WhisperForegroundService via MethodChannel.
 ///
-/// On Android the actual listening runs inside a native foreground service
-/// (WhisperForegroundService.kt) so it survives screen-off and app backgrounding.
-/// This Dart class:
-///   1. Sends start/stop/updateCodeword commands to the native service.
-///   2. Receives "onKeywordDetected" callbacks from the native service.
-///   3. Calls SOSService.triggerSOSAlert() silently when the keyword fires.
+/// The native service handles ALL detection and SMS sending independently —
+/// it does NOT need Flutter to be active. This Dart class:
+///   1. Starts/stops the native service and passes codeword + contacts.
+///   2. Receives "onKeywordDetected" only as a secondary notification
+///      (e.g. to update UI) — SOS is already sent natively by this point.
+///   3. Has its own 15s cooldown to prevent duplicate Flutter-side triggers.
 class WhisperService extends ChangeNotifier {
   static final WhisperService _instance = WhisperService._internal();
   factory WhisperService() => _instance;
   WhisperService._internal() {
-    // Listen for keyword-detected events coming from the native service
     _channel.setMethodCallHandler(_handleNativeCall);
   }
 
@@ -26,33 +22,29 @@ class WhisperService extends ChangeNotifier {
   final SOSService _sosService = SOSService();
 
   bool _isEnabled = false;
-  String _lastDetected = '';
+  // Cooldown: mirror of native cooldown to prevent duplicate Flutter triggers
+  DateTime? _lastTrigger;
+  static const _cooldown = Duration(seconds: 15);
 
   bool get isEnabled => _isEnabled;
-  bool get isListening => _isEnabled; // native service is running when enabled
-  String get lastDetected => _lastDetected;
+  bool get isListening => _isEnabled;
 
-  // ── Init ──────────────────────────────────────────────────────────────────
+  // ── Init ──────────────────────────────────────────────────────────────
 
-  /// Restore saved state on app start.
   Future<void> init() async {
     _isEnabled = await WhisperPrefs.isEnabled();
     if (_isEnabled) {
       final codeword = await WhisperPrefs.getCodeword();
-      if (codeword.isNotEmpty) {
-        await _startNativeService(codeword);
-      }
+      if (codeword.isNotEmpty) await _startNativeService(codeword);
     }
     notifyListeners();
   }
 
-  // ── Public API ────────────────────────────────────────────────────────────
+  // ── Public API ────────────────────────────────────────────────────────
 
-  /// Enable or disable the whisper detection system.
   Future<void> setEnabled(bool value) async {
     _isEnabled = value;
     await WhisperPrefs.setEnabled(value);
-
     if (value) {
       final codeword = await WhisperPrefs.getCodeword();
       await _startNativeService(codeword);
@@ -62,7 +54,6 @@ class WhisperService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Save a new codeword and push it to the running native service.
   Future<void> updateCodeword(String codeword) async {
     await WhisperPrefs.saveCodeword(codeword);
     try {
@@ -72,11 +63,18 @@ class WhisperService extends ChangeNotifier {
     }
   }
 
-  // ── Native bridge ─────────────────────────────────────────────────────────
+  // ── Native bridge ─────────────────────────────────────────────────────
 
   Future<void> _startNativeService(String codeword) async {
     try {
-      await _channel.invokeMethod('startService', {'codeword': codeword});
+      // Fetch contacts and pass as comma-separated numbers to native
+      final contacts = await _sosService.getEmergencyContacts().first;
+      final phones = contacts.map((c) => c.phoneNumber).join(',');
+
+      await _channel.invokeMethod('startService', {
+        'codeword': codeword,
+        'contacts': phones,
+      });
       debugPrint('[WhisperService] Native service started');
     } catch (e) {
       debugPrint('[WhisperService] startService error: $e');
@@ -92,44 +90,20 @@ class WhisperService extends ChangeNotifier {
     }
   }
 
-  /// Handles method calls coming FROM native → Flutter.
+  /// Called by native when keyword is detected.
+  /// Native has already sent SMS — this is just a secondary notification.
   Future<dynamic> _handleNativeCall(MethodCall call) async {
-    if (call.method == 'onKeywordDetected') {
-      debugPrint('[WhisperService] Keyword detected — triggering silent SOS');
-      _lastDetected = 'codeword detected';
-      notifyListeners();
-      await _triggerSilentSOS();
+    if (call.method != 'onKeywordDetected') return;
+
+    // Dart-side cooldown guard (prevents duplicate if Flutter is foreground)
+    final now = DateTime.now();
+    if (_lastTrigger != null && now.difference(_lastTrigger!) < _cooldown) {
+      debugPrint('[WhisperService] Ignored due to cooldown');
+      return;
     }
-  }
+    _lastTrigger = now;
 
-  // ── Silent SOS ────────────────────────────────────────────────────────────
-
-  Future<void> _triggerSilentSOS() async {
-    try {
-      final contacts = await _sosService.getEmergencyContacts().first;
-      final userName = await _sosService.getUserName();
-
-      if (contacts.isEmpty) {
-        debugPrint('[WhisperService] No emergency contacts — SOS skipped');
-        return;
-      }
-
-      // Log event to Firestore
-      await FirebaseFirestore.instance.collection('emergency_alerts').add({
-        'userId': FirebaseAuth.instance.currentUser?.uid,
-        'trigger': 'panic_whisper',
-        'timestamp': FieldValue.serverTimestamp(),
-        'type': 'whisper_sos',
-      });
-
-      await _sosService.triggerSOSAlert(
-        contacts: contacts,
-        userName: userName,
-      );
-
-      debugPrint('[WhisperService] Silent SOS triggered successfully');
-    } catch (e) {
-      debugPrint('[WhisperService] Error triggering SOS: $e');
-    }
+    debugPrint('[WhisperService] Keyword Detected — native SOS already sent');
+    notifyListeners();
   }
 }

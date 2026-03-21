@@ -71,10 +71,26 @@ class _PanicWhisperSettingsState extends State<PanicWhisperSettings> {
     }
 
     if (value) {
+      // Request microphone permission
       final micStatus = await Permission.microphone.request();
       if (!micStatus.isGranted) {
         _showSnack('Microphone permission is required.');
         return;
+      }
+      // Request fine location
+      final locStatus = await Permission.location.request();
+      if (!locStatus.isGranted) {
+        _showSnack('Location permission is required for SOS.');
+        return;
+      }
+      // Request background location (must be asked AFTER fine location)
+      final bgLocStatus = await Permission.locationAlways.request();
+      if (!bgLocStatus.isGranted) {
+        _showSnack(
+          'Background location denied. SOS may show "Location unavailable" '
+          'when screen is locked. Grant in Settings → App → Permissions.',
+        );
+        // Don't block — allow enabling with degraded location
       }
     }
 
