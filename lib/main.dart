@@ -151,6 +151,7 @@
 // }
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -178,13 +179,15 @@ import 'features/danger_alert/widgets/danger_alert_banner.dart';
 import 'features/eye_gesture_sos/services/eye_gesture_service.dart';
 import 'features/eye_gesture_sos/widgets/eye_sos_overlay.dart';
 import 'features/safety_mode/safety_mode_manager.dart';
+import 'features/auth/auth_service.dart';
+import 'theme/app_theme.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // Load Gemini API key from environment variable (pass via --dart-define=GEMINI_API_KEY=...)
   const geminiApiKey = String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
 
   final chatService = ChatServiceImpl(
@@ -194,23 +197,24 @@ void main() async {
     ),
   );
 
-  // Initialize Panic Whisper Detection (restores saved state on app start)
   await WhisperService().init();
 
-  // Initialize Danger Prediction Service
   final dangerService = DangerPredictionService();
   await dangerService.init();
 
-  // Initialize Eye Gesture SOS Service
   final eyeGestureService = EyeGestureService();
   await eyeGestureService.init();
 
-  // Initialize SafetyModeManager — coordinates eye ↔ whisper switching
   final safetyModeManager = SafetyModeManager(
     eyeService: eyeGestureService,
     whisperService: WhisperService(),
   );
   safetyModeManager.evaluateInitialMode();
+
+  // Session check
+  final loggedIn = await AuthService.isLoggedIn();
+
+  FlutterNativeSplash.remove();
 
   runApp(
     MultiProvider(
@@ -220,44 +224,41 @@ void main() async {
         ChangeNotifierProvider<EyeGestureService>.value(value: eyeGestureService),
         ChangeNotifierProvider<SafetyModeManager>.value(value: safetyModeManager),
       ],
-      child: const NirbhayaApp(),
+      child: NirbhayaApp(initialRoute: loggedIn ? '/home' : '/login'),
     ),
   );
 }
 
 class NirbhayaApp extends StatelessWidget {
-  const NirbhayaApp({super.key});
+  final String initialRoute;
+  const NirbhayaApp({super.key, required this.initialRoute});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Nirbhaya',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
-      // Wrap every screen with DangerAlertBanner AFTER MaterialApp provides Directionality
+      theme: AppTheme.light,
       builder: (context, child) => EyeSosOverlay(
         child: DangerAlertBanner(child: child ?? const SizedBox()),
       ),
-      initialRoute: '/login',
+      initialRoute: initialRoute,
       routes: {
-        '/login': (context) => const LoginScreen(),
-        '/signup': (context) => const SignupScreen(),
-        '/home': (context) => const HomeScreen(),
-        '/profile': (context) => const ProfileScreen(),
-        '/assistance': (context) => const AssistanceScreen(),
-        '/sos': (context) => const SosScreen(),
-        '/sosNew': (context) => const SOSScreenNew(),
-        '/sosSettings': (context) => const SOSSettingsScreen(),
-        '/chatbot': (context) => const ChatbotScreen(),
-        '/trackme': (context) => const TrackMeScreen(),
-        '/record': (context) => const RecordScreen(),
-        '/blackbanana': (context) => const BlackBananaScreen(),
-        '/settings': (context) => const SettingsScreen(),
-        '/completeProfile': (context) => const CompleteProfileScreen(),
-        '/pin': (context) => PinScreen(),
+        '/login':          (context) => const LoginScreen(),
+        '/signup':         (context) => const LoginScreen(), // redirect old signup to login
+        '/home':           (context) => const HomeScreen(),
+        '/profile':        (context) => const ProfileScreen(),
+        '/assistance':     (context) => const AssistanceScreen(),
+        '/sos':            (context) => const SosScreen(),
+        '/sosNew':         (context) => const SOSScreenNew(),
+        '/sosSettings':    (context) => const SOSSettingsScreen(),
+        '/chatbot':        (context) => const ChatbotScreen(),
+        '/trackme':        (context) => const TrackMeScreen(),
+        '/record':         (context) => const RecordScreen(),
+        '/blackbanana':    (context) => const BlackBananaScreen(),
+        '/settings':       (context) => const SettingsScreen(),
+        '/completeProfile':(context) => const CompleteProfileScreen(),
+        '/pin':            (context) => PinScreen(),
       },
     );
   }

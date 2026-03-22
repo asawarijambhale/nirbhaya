@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../theme/app_theme.dart';
+import '../widgets/app_logo.dart';
+import '../features/auth/auth_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -10,145 +14,216 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
   final PageController _controller = PageController();
+  String _userName = '';
+  String _userPhone = '';
+  String? _photoUrl;
 
-  // 🔹 Replace with women safety–related images
   final List<String> sliderImages = [
-    'https://tse4.mm.bing.net/th/id/OIP.KR_RWMvnzdgOTcGCJDJcbQHaFC?pid=Api&P=0&h=220', // women empowerment
-    'https://images.unsplash.com/photo-1606836591695-4f9231d41c36?auto=format&fit=crop&w=800&q=60', // helping hand
-    'https://images.unsplash.com/photo-1606760227091-2a19f7ca6a60?auto=format&fit=crop&w=800&q=60', // safe night
-    'https://images.unsplash.com/photo-1535968882947-1b06c1f93de0?auto=format&fit=crop&w=800&q=60', // safety awareness
+    'https://images.unsplash.com/photo-1606836591695-4f9231d41c36?auto=format&fit=crop&w=800&q=60',
+    'https://images.unsplash.com/photo-1606760227091-2a19f7ca6a60?auto=format&fit=crop&w=800&q=60',
+    'https://images.unsplash.com/photo-1535968882947-1b06c1f93de0?auto=format&fit=crop&w=800&q=60',
   ];
 
   final List<Map<String, dynamic>> buttons = [
-    {'icon': Icons.person, 'label': 'Profile', 'route': '/profile'},
-    {'icon': Icons.support_agent, 'label': 'Assistance', 'route': '/assistance'},
-    {'icon': Icons.warning_amber, 'label': 'SOS Alert', 'route': '/sosNew'},
-    {'icon': Icons.chat, 'label': 'Chatbot', 'route': '/chatbot'},
-    {'icon': Icons.location_on, 'label': 'Track Me', 'route': '/trackme'},
-    {'icon': Icons.mic, 'label': 'Record', 'route': '/record'},
-    {'icon': Icons.block, 'label': 'Blacklist', 'route': '/blackbanana'},
-    {'icon': Icons.settings, 'label': 'Settings', 'route': '/settings'},
-    {'icon': Icons.lock, 'label': 'Pin', 'route': '/pin'},
+    {'icon': Icons.person,        'label': 'Profile',    'route': '/profile',     'color': Color(0xFF7B1FA2)},
+    {'icon': Icons.support_agent, 'label': 'Assistance', 'route': '/assistance',  'color': Color(0xFF1565C0)},
+    {'icon': Icons.warning_amber, 'label': 'SOS Alert',  'route': '/sosNew',      'color': Color(0xFFB71C1C)},
+    {'icon': Icons.chat,          'label': 'Chatbot',    'route': '/chatbot',     'color': Color(0xFF00695C)},
+    {'icon': Icons.location_on,   'label': 'Track Me',   'route': '/trackme',     'color': Color(0xFF4527A0)},
+    {'icon': Icons.mic,           'label': 'Record',     'route': '/record',      'color': Color(0xFFAD1457)},
+    {'icon': Icons.block,         'label': 'Blacklist',  'route': '/blackbanana', 'color': Color(0xFF37474F)},
+    {'icon': Icons.settings,      'label': 'Settings',   'route': '/settings',    'color': Color(0xFF558B2F)},
+    {'icon': Icons.lock,          'label': 'Pin',        'route': '/pin',         'color': Color(0xFF6A1B9A)},
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUser();
+  }
+
+  Future<void> _loadUser() async {
+    final phone = await AuthService.getPhone();
+    if (phone == null) return;
+    setState(() => _userPhone = phone);
+    try {
+      final docId = phone.replaceAll(RegExp(r'[^\w]'), '_');
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(docId)
+          .get();
+      if (doc.exists && mounted) {
+        setState(() {
+          _userName = doc.data()?['name'] ?? '';
+          _photoUrl = doc.data()?['photoUrl'];
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _logout() async {
+    await AuthService.clearSession();
+    if (mounted) Navigator.pushReplacementNamed(context, '/login');
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white, // 🟢 White background
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text("Nirbhaya"),
+        title: const AppLogo(size: 32),
         centerTitle: true,
-        backgroundColor: const Color(0xFF101D68), // Royal blue
+        backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
-        elevation: 6,
-        shadowColor: Colors.black45,
+        elevation: 4,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined),
+            onPressed: () {},
+          ),
+        ],
       ),
+      drawer: _buildDrawer(),
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 16),
-          // 🖼 Image Slider
-          SizedBox(
-            height: 200,
-            child: PageView.builder(
-              controller: _controller,
-              onPageChanged: (index) {
-                setState(() {
-                  _currentIndex = index;
-                });
-              },
-              itemCount: sliderImages.length,
-              itemBuilder: (context, index) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Image.network(
-                      sliderImages[index],
-                      fit: BoxFit.cover,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return const Center(child: CircularProgressIndicator());
-                      },
-                      errorBuilder: (context, error, stackTrace) =>
-                          const Center(child: Icon(Icons.broken_image, size: 50)),
+          // Welcome header
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [AppColors.primaryDark, AppColors.primary],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(24),
+                bottomRight: Radius.circular(24),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _userName.isNotEmpty ? 'Hello, $_userName 👋' : 'Hello 👋',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Stay safe. We\'re with you.',
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+                const SizedBox(height: 16),
+                // Image slider
+                SizedBox(
+                  height: 160,
+                  child: PageView.builder(
+                    controller: _controller,
+                    onPageChanged: (i) => setState(() => _currentIndex = i),
+                    itemCount: sliderImages.length,
+                    itemBuilder: (context, index) => Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: Image.network(
+                          sliderImages[index],
+                          fit: BoxFit.cover,
+                          loadingBuilder: (_, child, progress) =>
+                              progress == null ? child : const Center(child: CircularProgressIndicator(color: Colors.white)),
+                          errorBuilder: (_, __, ___) =>
+                              const Center(child: Icon(Icons.broken_image, color: Colors.white54, size: 40)),
+                        ),
+                      ),
                     ),
                   ),
-                );
-              },
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(
+                    sliderImages.length,
+                    (i) => AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      width: _currentIndex == i ? 14 : 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: _currentIndex == i ? Colors.white : Colors.white38,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 12),
-          // ⚪ Dots Indicator
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(
-              sliderImages.length,
-              (index) => AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                width: _currentIndex == index ? 12 : 8,
-                height: _currentIndex == index ? 12 : 8,
-                decoration: BoxDecoration(
-                  color:
-                      _currentIndex == index ? const Color(0xFF101D68) : Colors.grey[400],
-                  shape: BoxShape.circle,
-                ),
+
+          const SizedBox(height: 16),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20),
+            child: Text(
+              'Features',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textDark,
               ),
             ),
           ),
-          const SizedBox(height: 24),
-          // 🔘 Feature Buttons Grid
+          const SizedBox(height: 8),
+
+          // Feature grid
           Expanded(
             child: GridView.builder(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               itemCount: buttons.length,
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 20,
-                mainAxisSpacing: 20,
-                childAspectRatio: 1.1,
+                crossAxisCount: 3,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 0.9,
               ),
               itemBuilder: (context, index) {
+                final btn = buttons[index];
                 return GestureDetector(
-                  onTap: () {
-                    Navigator.pushNamed(context, buttons[index]['route']);
-                  },
+                  onTap: () => Navigator.pushNamed(context, btn['route']),
                   child: Container(
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      gradient: const LinearGradient(
-                        colors: [
-                          Color(0xFF101D68),
-                          Color(0xFF3B82F6),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 6,
-                          offset: const Offset(2, 4),
+                          color: (btn['color'] as Color).withOpacity(0.15),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
                         ),
                       ],
                     ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
-                          buttons[index]['icon'],
-                          size: 40,
-                          color: Colors.white,
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: (btn['color'] as Color).withOpacity(0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(btn['icon'] as IconData,
+                              size: 28, color: btn['color'] as Color),
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 8),
                         Text(
-                          buttons[index]['label'],
+                          btn['label'],
                           textAlign: TextAlign.center,
                           style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.5,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textDark,
                           ),
                         ),
                       ],
@@ -160,6 +235,59 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildDrawer() {
+    return Drawer(
+      child: Column(
+        children: [
+          UserAccountsDrawerHeader(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [AppColors.primaryDark, AppColors.primary],
+              ),
+            ),
+            currentAccountPicture: CircleAvatar(
+              backgroundColor: Colors.white,
+              backgroundImage: _photoUrl != null ? NetworkImage(_photoUrl!) : null,
+              child: _photoUrl == null
+                  ? const Icon(Icons.person, size: 36, color: AppColors.primary)
+                  : null,
+            ),
+            accountName: Text(
+              _userName.isNotEmpty ? _userName : 'User',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            accountEmail: Text(
+              _userPhone.isNotEmpty ? _userPhone : '',
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+          _drawerItem(Icons.home_outlined,    'Home',               '/home'),
+          _drawerItem(Icons.person_outline,   'Profile',            '/profile'),
+          _drawerItem(Icons.contacts_outlined,'Emergency Contacts', '/sosSettings'),
+          _drawerItem(Icons.settings_outlined,'Settings',           '/settings'),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.logout, color: AppColors.error),
+            title: const Text('Logout',
+                style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600)),
+            onTap: _logout,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _drawerItem(IconData icon, String label, String route) {
+    return ListTile(
+      leading: Icon(icon, color: AppColors.primary),
+      title: Text(label, style: const TextStyle(fontSize: 15)),
+      onTap: () {
+        Navigator.pop(context);
+        Navigator.pushNamed(context, route);
+      },
     );
   }
 }
