@@ -43,7 +43,6 @@ void initState() {
   }
 
   Future<void> _requestPermissions() async {
-    await Permission.phone.request();
     await Permission.sms.request();
     await Permission.location.request();
   }
@@ -133,11 +132,6 @@ void initState() {
               CircularProgressIndicator(),
               SizedBox(height: 16),
               Text('Sending emergency SMS...'),
-              SizedBox(height: 8),
-              Text(
-                'Opening backup phone dialers...',
-                style: TextStyle(fontSize: 12),
-              ),
             ],
           ),
         ),
@@ -154,9 +148,6 @@ void initState() {
         final smsSent = List<String>.from(results['sms_sent'] as List? ?? []);
         final smsFailed = List<String>.from(
           results['sms_failed'] as List? ?? [],
-        );
-        final callsInitiated = List<String>.from(
-          results['calls_initiated'] as List? ?? [],
         );
 
         showDialog(
@@ -241,45 +232,6 @@ void initState() {
                     ),
                   ],
 
-                  // Phone Dialers
-                  if (callsInitiated.isNotEmpty) ...[
-                    if (smsSent.isNotEmpty || smsFailed.isNotEmpty)
-                      const SizedBox(height: 12),
-                    const Divider(),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        const Icon(Icons.phone, color: Colors.blue, size: 24),
-                        const SizedBox(width: 8),
-                        const Expanded(
-                          child: Text(
-                            'PHONE DIALERS',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              color: Colors.blue,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Press CALL to connect:',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                    const SizedBox(height: 6),
-                    ...callsInitiated.map(
-                      (name) => Padding(
-                        padding: const EdgeInsets.only(left: 32, bottom: 6),
-                        child: Text(
-                          '☎️ $name',
-                          style: const TextStyle(fontSize: 13),
-                        ),
-                      ),
-                    ),
-                  ],
-
                   // Info box
                   const SizedBox(height: 12),
                   Container(
@@ -302,7 +254,7 @@ void initState() {
                         ),
                         SizedBox(height: 6),
                         Text(
-                          'Your location and emergency alert have been sent to all contacts.\n\nBackup: Phone dialers remain open if manual calls are needed.',
+                          'Two SMS were sent: (1) Emergency alert, (2) Live location link.',
                           style: TextStyle(fontSize: 11),
                         ),
                       ],

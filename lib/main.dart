@@ -181,6 +181,7 @@ import 'features/eye_gesture_sos/widgets/eye_sos_overlay.dart';
 import 'features/safety_mode/safety_mode_manager.dart';
 import 'features/auth/auth_service.dart';
 import 'theme/app_theme.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
   final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
@@ -213,6 +214,8 @@ void main() async {
 
   // Session check
   final loggedIn = await AuthService.isLoggedIn();
+  final prefs = await SharedPreferences.getInstance();
+  final decoyEnabled = prefs.getBool('settings_decoy_mode_enabled') ?? false;
 
   FlutterNativeSplash.remove();
 
@@ -224,7 +227,11 @@ void main() async {
         ChangeNotifierProvider<EyeGestureService>.value(value: eyeGestureService),
         ChangeNotifierProvider<SafetyModeManager>.value(value: safetyModeManager),
       ],
-      child: NirbhayaApp(initialRoute: loggedIn ? '/home' : '/login'),
+      child: NirbhayaApp(
+        initialRoute: loggedIn
+            ? (decoyEnabled ? '/pin' : '/home')
+            : '/login',
+      ),
     ),
   );
 }

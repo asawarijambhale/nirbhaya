@@ -26,14 +26,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final List<Map<String, dynamic>> buttons = [
     {'icon': Icons.person,        'label': 'Profile',    'route': '/profile',     'color': Color(0xFF7B1FA2)},
-    {'icon': Icons.support_agent, 'label': 'Assistance', 'route': '/assistance',  'color': Color(0xFF1565C0)},
+    //{'icon': Icons.support_agent, 'label': 'Assistance', 'route': '/assistance',  'color': Color(0xFF1565C0)},
     {'icon': Icons.warning_amber, 'label': 'SOS Alert',  'route': '/sosNew',      'color': Color(0xFFB71C1C)},
     {'icon': Icons.chat,          'label': 'Chatbot',    'route': '/chatbot',     'color': Color(0xFF00695C)},
     {'icon': Icons.location_on,   'label': 'Track Me',   'route': '/trackme',     'color': Color(0xFF4527A0)},
     {'icon': Icons.mic,           'label': 'Record',     'route': '/record',      'color': Color(0xFFAD1457)},
-    {'icon': Icons.block,         'label': 'Blacklist',  'route': '/blackbanana', 'color': Color(0xFF37474F)},
+    //{'icon': Icons.block,         'label': 'Blacklist',  'route': '/blackbanana', 'color': Color(0xFF37474F)},
     {'icon': Icons.settings,      'label': 'Settings',   'route': '/settings',    'color': Color(0xFF558B2F)},
-    {'icon': Icons.lock,          'label': 'Pin',        'route': '/pin',         'color': Color(0xFF6A1B9A)},
+    //{'icon': Icons.lock,          'label': 'Pin',        'route': '/pin',         'color': Color(0xFF6A1B9A)},
   ];
 
   @override

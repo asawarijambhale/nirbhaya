@@ -1,10 +1,12 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 /// Manages session persistence and user existence check.
 class AuthService {
   static const _keyPhone     = 'auth_phone';
   static const _keyLoggedIn  = 'auth_logged_in';
+  static final FirebaseAuth _auth = FirebaseAuth.instance;
 
   // ── Session ──────────────────────────────────────────────────────────────
 
@@ -28,6 +30,25 @@ class AuthService {
   static Future<String?> getPhone() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_keyPhone);
+  }
+
+  static String _sanitizePhoneAsDocId(String phone) {
+    // Keep consistent with existing usage across the app
+    return phone.replaceAll(RegExp(r'[^\w]'), '_');
+  }
+
+  /// Returns the current Firestore `users/<docId>` id.
+  ///
+  /// - Prefers FirebaseAuth uid (email auth flow).
+  /// - Falls back to saved phone session (OTP flow).
+  /// - Returns null if neither is available.
+  static Future<String?> getCurrentUserDocId() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid != null && uid.trim().isNotEmpty) return uid.trim();
+
+    final phone = await getPhone();
+    if (phone == null || phone.trim().isEmpty) return null;
+    return _sanitizePhoneAsDocId(phone.trim());
   }
 
   // ── Firestore user check ─────────────────────────────────────────────────

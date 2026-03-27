@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'edit_profile_screen.dart';
+import '../features/auth/auth_service.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -9,7 +10,7 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const royalBlue = Color(0xFF101D68);
-    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
@@ -27,24 +28,37 @@ class ProfileScreen extends StatelessWidget {
         backgroundColor: royalBlue,
         elevation: 0,
       ),
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(uid)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
+      body: FutureBuilder<String?>(
+        future: uid != null && uid.trim().isNotEmpty
+            ? Future.value(uid)
+            : AuthService.getCurrentUserDocId(),
+        builder: (context, docIdSnap) {
+          if (docIdSnap.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
           }
-
-          var data = snapshot.data!.data() as Map<String, dynamic>?;
-
-          if (data == null) {
-            return const Center(child: Text("No Profile Data Found"));
+          final docId = docIdSnap.data;
+          if (docId == null || docId.trim().isEmpty) {
+            return const Center(child: Text("Please login again."));
           }
 
-          return Column(
-            children: [
+          return StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .doc(docId)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              var data = snapshot.data!.data() as Map<String, dynamic>?;
+
+              if (data == null) {
+                return const Center(child: Text("No Profile Data Found"));
+              }
+
+              return Column(
+                children: [
               // 🔥 Profile Header
               Container(
                 width: double.infinity,
@@ -171,6 +185,8 @@ class ProfileScreen extends StatelessWidget {
                 ),
               ),
             ],
+              );
+            },
           );
         },
       ),

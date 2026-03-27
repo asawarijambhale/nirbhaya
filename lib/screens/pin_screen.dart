@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../services/gallery_service.dart';
-import 'home_screen2.dart';
 
 class PinScreen extends StatefulWidget {
   @override
@@ -19,12 +18,7 @@ class _PinScreenState extends State<PinScreen> {
 
     if (enteredPin == correctPin) {
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => HomeScreen(),
-        ),
-      );
+      Navigator.pushReplacementNamed(context, '/home');
 
     } else {
 

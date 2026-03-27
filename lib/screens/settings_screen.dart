@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../features/panic_whisper/panic_whisper_settings.dart';
 import '../features/danger_alert/danger_alert_settings.dart';
 import '../features/eye_gesture_sos/eye_gesture_settings.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -11,11 +12,33 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  static const _keyDecoyMode = 'settings_decoy_mode_enabled';
+
   bool _enableCameraLocation = true;
   bool _enableDecoyMode = false;
   bool _addSosContact = true;
   bool _enableNotifications = true;
   bool _enableCamMicAccess = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPrefs();
+  }
+
+  Future<void> _loadPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _enableDecoyMode = prefs.getBool(_keyDecoyMode) ?? false;
+    });
+  }
+
+  Future<void> _setDecoyMode(bool val) async {
+    setState(() => _enableDecoyMode = val);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyDecoyMode, val);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +66,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildSettingCard(
               "Enable Decoy App Mode",
               _enableDecoyMode,
-              (val) => setState(() => _enableDecoyMode = val),
+              (val) => _setDecoyMode(val),
               royalBlue,
             ),
             _buildSettingCard(

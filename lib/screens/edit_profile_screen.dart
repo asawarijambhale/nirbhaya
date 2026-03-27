@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../features/auth/auth_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -27,8 +28,7 @@ class _EditProfileScreenState
   final TextEditingController workAddressController =
       TextEditingController();
 
-  final uid =
-      FirebaseAuth.instance.currentUser!.uid;
+  String? _docId;
 
   @override
   void initState() {
@@ -37,9 +37,15 @@ class _EditProfileScreenState
   }
 
   Future<void> _loadUserData() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    _docId = (uid != null && uid.trim().isNotEmpty)
+        ? uid
+        : await AuthService.getCurrentUserDocId();
+    if (_docId == null || _docId!.trim().isEmpty) return;
+
     final doc = await FirebaseFirestore.instance
         .collection('users')
-        .doc(uid)
+        .doc(_docId)
         .get();
 
     if (doc.exists) {
@@ -61,9 +67,19 @@ class _EditProfileScreenState
     if (!_formKey.currentState!.validate())
       return;
 
+    final docId = _docId ??
+        FirebaseAuth.instance.currentUser?.uid ??
+        await AuthService.getCurrentUserDocId();
+    if (docId == null || docId.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please login again.")),
+      );
+      return;
+    }
+
     await FirebaseFirestore.instance
         .collection('users')
-        .doc(uid)
+        .doc(docId)
         .update({
       'name': nameController.text.trim(),
       'phone': phoneController.text.trim(),

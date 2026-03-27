@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'sms_sender.dart';
+import '../features/auth/auth_service.dart';
 
 class EmergencyContact {
   final String id;
@@ -48,14 +49,41 @@ class SOSService {
     return _instance;
   }
 
-  String get userId => _auth.currentUser?.uid ?? '';
+  Future<String> _requireUserDocId() async {
+    final docId = await AuthService.getCurrentUserDocId();
+    if (docId == null || docId.trim().isEmpty) {
+      throw Exception('User not logged in');
+    }
+    return docId;
+  }
+
+  Future<String> _getUserPhone() async {
+    final fromSession = await AuthService.getPhone();
+    if (fromSession != null && fromSession.trim().isNotEmpty) {
+      return fromSession.trim();
+    }
+    try {
+      final userDocId = await _requireUserDocId();
+      final userDoc = await _firestore.collection('users').doc(userDocId).get();
+      final phone = userDoc.data()?['phone'];
+      if (phone is String && phone.trim().isNotEmpty) return phone.trim();
+    } catch (_) {}
+    return '';
+  }
 
   /// Get user name from Firestore
   Future<String> getUserName() async {
     try {
-      final userDoc = await _firestore.collection('users').doc(userId).get();
+      final userDocId = await _requireUserDocId();
+      final userDoc = await _firestore.collection('users').doc(userDocId).get();
       final userData = userDoc.data();
-      return userData?['fullName'] ?? 'User';
+      final name = userData?['name'];
+      if (name is String && name.trim().isNotEmpty) return name.trim();
+      final fullName = userData?['fullName'];
+      if (fullName is String && fullName.trim().isNotEmpty) return fullName.trim();
+      final username = userData?['username'];
+      if (username is String && username.trim().isNotEmpty) return username.trim();
+      return 'User';
     } catch (e) {
       print('Error loading user name: $e');
       return 'User';
@@ -65,9 +93,10 @@ class SOSService {
   /// Add emergency contact
   Future<void> addEmergencyContact(EmergencyContact contact) async {
     try {
+      final userDocId = await _requireUserDocId();
       await _firestore
           .collection('users')
-          .doc(userId)
+          .doc(userDocId)
           .collection('emergencyContacts')
           .doc(contact.id)
           .set(contact.toMap());
@@ -79,9 +108,10 @@ class SOSService {
   /// Update emergency contact
   Future<void> updateEmergencyContact(EmergencyContact contact) async {
     try {
+      final userDocId = await _requireUserDocId();
       await _firestore
           .collection('users')
-          .doc(userId)
+          .doc(userDocId)
           .collection('emergencyContacts')
           .doc(contact.id)
           .update(contact.toMap());
@@ -93,9 +123,10 @@ class SOSService {
   /// Delete emergency contact
   Future<void> deleteEmergencyContact(String contactId) async {
     try {
+      final userDocId = await _requireUserDocId();
       await _firestore
           .collection('users')
-          .doc(userId)
+          .doc(userDocId)
           .collection('emergencyContacts')
           .doc(contactId)
           .delete();
@@ -105,17 +136,21 @@ class SOSService {
   }
 
   /// Get all emergency contacts
-  Stream<List<EmergencyContact>> getEmergencyContacts() {
-    return _firestore
+  Stream<List<EmergencyContact>> getEmergencyContacts() async* {
+    final docId = await AuthService.getCurrentUserDocId();
+    if (docId == null || docId.trim().isEmpty) {
+      yield const <EmergencyContact>[];
+      return;
+    }
+
+    yield* _firestore
         .collection('users')
-        .doc(userId)
+        .doc(docId)
         .collection('emergencyContacts')
         .snapshots()
-        .map((snapshot) {
-          return snapshot.docs
-              .map((doc) => EmergencyContact.fromMap(doc.data()))
-              .toList();
-        });
+        .map((snapshot) => snapshot.docs
+            .map((doc) => EmergencyContact.fromMap(doc.data()))
+            .toList());
   }
 
   /// Get current user location
@@ -206,20 +241,22 @@ class SOSService {
       final cleanedNumber = cleanPhoneNumber(phoneNumber);
       final mapsLink = generateMapsLink(latitude, longitude);
 
-      final message =
-          '🚨 EMERGENCY ALERT 🚨\n\n'
-          'Name: $userName\n'
-          'Status: I need IMMEDIATE help!\n\n'
-          '📍 Location: $mapsLink\n\n'
-          'Coordinates:\n'
-          'Latitude: ${latitude.toStringAsFixed(6)}\n'
-          'Longitude: ${longitude.toStringAsFixed(6)}\n\n'
-          'Please contact me immediately or send help to this location!';
+      final userPhone = await _getUserPhone();
+      final alertMsg =
+          'Emergency !! $userName ${userPhone.isNotEmpty ? "($userPhone) " : ""}is in danger , help her as early as possible';
+      final locationMsg = 'Location - $mapsLink';
 
-      final success = await SmsSender.sendSMS(
+      final success1 = await SmsSender.sendSMS(
         phoneNumber: cleanedNumber,
-        message: message,
+        message: alertMsg,
       );
+      // Avoid device/carrier throttling when sending back-to-back SMS
+      await Future.delayed(const Duration(milliseconds: 400));
+      final success2 = await SmsSender.sendSMS(
+        phoneNumber: cleanedNumber,
+        message: locationMsg,
+      );
+      final success = success1 && success2;
 
       print('SMS to $phoneNumber: ${success ? 'SUCCESS' : 'FAILED'}');
       return success;
@@ -238,24 +275,25 @@ class SOSService {
   ) async {
     final results = <String, bool>{};
     final mapsLink = generateMapsLink(latitude, longitude);
-
-    final message =
-        '🚨 EMERGENCY ALERT 🚨\n\n'
-        'Name: $userName\n'
-        'Status: I need IMMEDIATE help!\n\n'
-        '📍 Location: $mapsLink\n\n'
-        'Coordinates:\n'
-        'Latitude: ${latitude.toStringAsFixed(6)}\n'
-        'Longitude: ${longitude.toStringAsFixed(6)}\n\n'
-        'Please contact me immediately or send help to this location!';
+    final userPhone = await _getUserPhone();
+    final alertMsg =
+        'Emergency !! $userName ${userPhone.isNotEmpty ? "($userPhone) " : ""}is in danger , help her as early as possible';
+    final locationMsg = 'Location - $mapsLink';
 
     for (EmergencyContact contact in contacts) {
       try {
         final cleanedNumber = cleanPhoneNumber(contact.phoneNumber);
-        final success = await SmsSender.sendSMS(
+        final success1 = await SmsSender.sendSMS(
           phoneNumber: cleanedNumber,
-          message: message,
+          message: alertMsg,
         );
+        // Avoid device/carrier throttling when sending back-to-back SMS
+        await Future.delayed(const Duration(milliseconds: 400));
+        final success2 = await SmsSender.sendSMS(
+          phoneNumber: cleanedNumber,
+          message: locationMsg,
+        );
+        final success = success1 && success2;
         results[contact.name] = success;
         print('SMS to ${contact.name}: ${success ? 'SUCCESS' : 'FAILED'}');
       } catch (e) {
@@ -302,9 +340,10 @@ class SOSService {
     double? longitude,
   }) async {
     try {
+      final userDocId = await _requireUserDocId();
       await _firestore
           .collection('users')
-          .doc(userId)
+          .doc(userDocId)
           .collection('sosLogs')
           .add({
             'timestamp': FieldValue.serverTimestamp(),
@@ -319,19 +358,23 @@ class SOSService {
   }
 
   /// Get SOS logs
-  Stream<List<Map<String, dynamic>>> getSOSLogs() {
-    return _firestore
+  Stream<List<Map<String, dynamic>>> getSOSLogs() async* {
+    final docId = await AuthService.getCurrentUserDocId();
+    if (docId == null || docId.trim().isEmpty) {
+      yield const <Map<String, dynamic>>[];
+      return;
+    }
+
+    yield* _firestore
         .collection('users')
-        .doc(userId)
+        .doc(docId)
         .collection('sosLogs')
         .orderBy('timestamp', descending: true)
         .snapshots()
-        .map((snapshot) {
-          return snapshot.docs.map((doc) => doc.data()).toList();
-        });
+        .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
   }
 
-  /// Trigger complete SOS alert - AUTO SMS + Backup calls
+  /// Trigger SOS alert - SMS only (two messages)
   Future<Map<String, dynamic>> triggerSOSAlert({
     required List<EmergencyContact> contacts,
     required String userName,
@@ -347,6 +390,7 @@ class SOSService {
     };
 
     try {
+      final userDocId = await _requireUserDocId();
       if (contacts.isEmpty) {
         throw Exception('No emergency contacts available');
       }
@@ -384,44 +428,15 @@ class SOSService {
       results['sms_sent'] = smsSent;
       results['sms_failed'] = smsFailed;
 
-      // ===== STEP 2: OPEN PHONE DIALERS AS BACKUP =====
-      print('\n--- STEP 2: Opening phone dialers as backup ---');
-      List<String> successfulCalls = [];
-      List<String> failedCalls = [];
-
-      for (EmergencyContact contact in contacts) {
-        try {
-          print('Opening dialer for: ${contact.name}');
-          bool callSuccess = await initiateEmergencyCall(contact.phoneNumber);
-
-          if (callSuccess) {
-            successfulCalls.add(contact.name);
-            print('✓ Dialer opened for ${contact.name}');
-          } else {
-            failedCalls.add(contact.name);
-            print('✗ Failed to open dialer for ${contact.name}');
-          }
-
-          // Delay between dialers
-          await Future.delayed(const Duration(seconds: 1));
-        } catch (e) {
-          failedCalls.add(contact.name);
-          print('✗ Exception with ${contact.name}: $e');
-        }
-      }
-
-      results['calls_initiated'] = successfulCalls;
-      results['calls_failed'] = failedCalls;
-
-      // ===== STEP 3: LOG TO FIREBASE =====
-      print('\n--- STEP 3: Logging to Firebase ---');
+      // ===== STEP 2: LOG TO FIREBASE =====
+      print('\n--- STEP 2: Logging to Firebase ---');
 
       final mapsLink = generateMapsLink(position.latitude, position.longitude);
 
       // Log detailed SOS event with SMS delivery status
       await _firestore
           .collection('users')
-          .doc(userId)
+          .doc(userDocId)
           .collection('sosLogs')
           .add({
             'timestamp': FieldValue.serverTimestamp(),
@@ -430,22 +445,18 @@ class SOSService {
             'smsSent': smsSent,
             'smsFailed': smsFailed,
             'contactsNotified': smsSent,
-            'callsInitiated': successfulCalls,
-            'callsFailed': failedCalls,
             'latitude': position.latitude,
             'longitude': position.longitude,
             'totalContacts': contacts.length,
             'successfulSMS': smsSent.length,
             'failedSMS': smsFailed.length,
-            'successfulCalls': successfulCalls.length,
-            'failedCalls': failedCalls.length,
             'mapsLink': mapsLink,
           });
 
       // Also log to sos_events for Twilio cloud function backup
       await _firestore.collection('sos_events').add({
         'timestamp': FieldValue.serverTimestamp(),
-        'userId': userId,
+        'userId': userDocId,
         'userName': userName,
         'location': mapsLink,
         'latitude': position.latitude,
@@ -459,11 +470,12 @@ class SOSService {
         'smsFailedCount': smsFailed.length,
       });
 
-      results['success'] = smsSent.isNotEmpty || successfulCalls.isNotEmpty;
+      results['calls_initiated'] = <String>[];
+      results['calls_failed'] = <String>[];
+      results['success'] = smsSent.isNotEmpty;
 
       print('\n=== SOS ALERT COMPLETE ===');
       print('SMS sent: ${smsSent.length}/${contacts.length}');
-      print('Dialers opened: ${successfulCalls.length}/${contacts.length}');
 
       return results;
     } catch (e) {
