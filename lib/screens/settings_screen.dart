@@ -57,36 +57,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
         padding: const EdgeInsets.all(16),
         child: ListView(
           children: [
-            _buildSettingCard(
-              "Enable Camera Location",
-              _enableCameraLocation,
-              (val) => setState(() => _enableCameraLocation = val),
-              royalBlue,
-            ),
+            // _buildSettingCard(
+            //   "Enable Camera Location",
+            //   _enableCameraLocation,
+            //   (val) => setState(() => _enableCameraLocation = val),
+            //   royalBlue,
+            // ),
             _buildSettingCard(
               "Enable Decoy App Mode",
               _enableDecoyMode,
               (val) => _setDecoyMode(val),
               royalBlue,
             ),
-            _buildSettingCard(
-              "Add SOS Contact",
-              _addSosContact,
-              (val) => setState(() => _addSosContact = val),
-              royalBlue,
-            ),
-            _buildSettingCard(
-              "Enable Notifications",
-              _enableNotifications,
-              (val) => setState(() => _enableNotifications = val),
-              royalBlue,
-            ),
-            _buildSettingCard(
-              "Enable Camera & Microphone Access",
-              _enableCamMicAccess,
-              (val) => setState(() => _enableCamMicAccess = val),
-              royalBlue,
-            ),
+            // _buildSettingCard(
+            //   "Add SOS Contact",
+            //   _addSosContact,
+            //   (val) => setState(() => _addSosContact = val),
+            //   royalBlue,
+            // ),
+            // _buildSettingCard(
+            //   "Enable Notifications",
+            //   _enableNotifications,
+            //   (val) => setState(() => _enableNotifications = val),
+            //   royalBlue,
+            // ),
+            // _buildSettingCard(
+            //   "Enable Camera & Microphone Access",
+            //   _enableCamMicAccess,
+            //   (val) => setState(() => _enableCamMicAccess = val),
+            //   royalBlue,
+            // ),
 
             // ── Panic Whisper Detection ──────────────────────────────────
             const PanicWhisperSettings(),

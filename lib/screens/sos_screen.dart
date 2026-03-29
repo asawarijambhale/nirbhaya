@@ -1,9 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:permission_handler/permission_handler.dart';
-
-  import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/sos_service.dart';
 
 class SosScreen extends StatefulWidget {
   const SosScreen({super.key});
@@ -13,6 +10,7 @@ class SosScreen extends StatefulWidget {
 }
 
 class _SosScreenState extends State<SosScreen> {
+  final SOSService _sosService = SOSService();
   List<Map<String, String>> contacts = [];
   
   int countdown = 10;
@@ -38,19 +36,6 @@ class _SosScreenState extends State<SosScreen> {
     Navigator.pop(context);
   }
 
-  // ================= GET LOCATION =================
-  Future<String> _getLocation() async {
-    await Permission.location.request();
-
-    Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high);
-
-    return "https://maps.google.com/?q=${position.latitude},${position.longitude}";
-  }
-
-  
-
- 
   // ================= MAIN SOS FUNCTION =================
 
 
@@ -61,18 +46,31 @@ Future<void> _sendSOS() async {
   }
 
   try {
-    String locationLink = await _getLocation();
+    final userName = await _sosService.getUserName();
+    final emergencyContacts = contacts
+        .where((c) => (c['name'] ?? '').isNotEmpty && (c['phone'] ?? '').isNotEmpty)
+        .map(
+          (c) => EmergencyContact(
+            id: '${c['name']}_${c['phone']}',
+            name: c['name']!,
+            phoneNumber: c['phone']!,
+          ),
+        )
+        .toList();
 
-    await FirebaseFirestore.instance.collection("sos_events").add({
-      "timestamp": FieldValue.serverTimestamp(),
-      "location": locationLink,
-      "contacts": contacts,
-      "status": "triggered",
-    });
+    if (emergencyContacts.isEmpty) {
+      _showMessage("Add at least one valid contact");
+      return;
+    }
 
-    _showMessage("🚨 SOS Sent to Server!");
+    await _sosService.triggerSOSAlert(
+      contacts: emergencyContacts,
+      userName: userName,
+    );
+
+    _showMessage("🚨 Emergency SMS sent successfully!");
   } catch (e) {
-    _showMessage("Failed to trigger SOS");
+    _showMessage("Failed to trigger SOS: $e");
   }
 }
   // ================= START TIMER =================

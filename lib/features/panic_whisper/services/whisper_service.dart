@@ -5,12 +5,9 @@ import 'whisper_prefs.dart';
 
 /// Bridges Flutter ↔ Android WhisperForegroundService via MethodChannel.
 ///
-/// The native service handles ALL detection and SMS sending independently —
-/// it does NOT need Flutter to be active. This Dart class:
-///   1. Starts/stops the native service and passes codeword + contacts.
-///   2. Receives "onKeywordDetected" only as a secondary notification
-///      (e.g. to update UI) — SOS is already sent natively by this point.
-///   3. Has its own 15s cooldown to prevent duplicate Flutter-side triggers.
+/// The native service detects the keyword and notifies Flutter.
+/// Flutter then triggers the unified SOS flow from `SOSService` so every SOS
+/// feature uses the same SMS format and police-details behavior.
 class WhisperService extends ChangeNotifier {
   static final WhisperService _instance = WhisperService._internal();
   factory WhisperService() => _instance;
@@ -91,7 +88,7 @@ class WhisperService extends ChangeNotifier {
   }
 
   /// Called by native when keyword is detected.
-  /// Native has already sent SMS — this is just a secondary notification.
+  /// Triggers the same SOS pipeline used by the SOS screen.
   Future<dynamic> _handleNativeCall(MethodCall call) async {
     if (call.method != 'onKeywordDetected') return;
 
@@ -103,7 +100,21 @@ class WhisperService extends ChangeNotifier {
     }
     _lastTrigger = now;
 
-    debugPrint('[WhisperService] Keyword Detected — native SOS already sent');
+    debugPrint('[WhisperService] Keyword detected — triggering unified SOS flow');
+    try {
+      final contacts = await _sosService.getEmergencyContacts().first;
+      final userName = await _sosService.getUserName();
+      if (contacts.isNotEmpty) {
+        await _sosService.triggerSOSAlert(
+          contacts: contacts,
+          userName: userName,
+        );
+      } else {
+        debugPrint('[WhisperService] No emergency contacts configured');
+      }
+    } catch (e) {
+      debugPrint('[WhisperService] unified SOS trigger error: $e');
+    }
     notifyListeners();
   }
 }

@@ -149,6 +149,12 @@ void initState() {
         final smsFailed = List<String>.from(
           results['sms_failed'] as List? ?? [],
         );
+        final policeRaw = results['police_notified'];
+        final policeNotified = policeRaw is Map
+            ? Map<String, dynamic>.from(policeRaw as Map)
+            : null;
+        final userCity = (results['user_city'] ?? '').toString();
+        final policeSmsSent = results['police_sms_sent'] == true;
 
         showDialog(
           context: context,
@@ -229,6 +235,53 @@ void initState() {
                           style: const TextStyle(fontSize: 13),
                         ),
                       ),
+                    ),
+                  ],
+
+                  if (policeNotified != null) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Police Assigned',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text('Name: ${policeNotified['name'] ?? '-'}'),
+                          Text('Phone: ${policeNotified['phoneNumber'] ?? '-'}'),
+                          Text('Vehicle: ${policeNotified['vehicleNumber'] ?? '-'}'),
+                          Text('City: ${policeNotified['city'] ?? userCity}'),
+                          if (!policeSmsSent) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Note: SMS to this police number could not be confirmed. Your emergency contacts were still notified.',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.orange[800],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ] else if (userCity.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      'No matching police test record found for city: $userCity',
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                   ],
 

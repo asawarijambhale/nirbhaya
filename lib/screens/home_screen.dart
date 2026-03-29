@@ -19,9 +19,9 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _photoUrl;
 
   final List<String> sliderImages = [
-    'https://images.unsplash.com/photo-1606836591695-4f9231d41c36?auto=format&fit=crop&w=800&q=60',
-    'https://images.unsplash.com/photo-1606760227091-2a19f7ca6a60?auto=format&fit=crop&w=800&q=60',
-    'https://images.unsplash.com/photo-1535968882947-1b06c1f93de0?auto=format&fit=crop&w=800&q=60',
+     'assets/images/OIP1.jpg',
+  'assets/images/OIP2.jpg',
+  'assets/images/OIP.jpg',
   ];
 
   final List<Map<String, dynamic>> buttons = [
@@ -130,14 +130,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 4),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(14),
-                        child: Image.network(
-                          sliderImages[index],
-                          fit: BoxFit.cover,
-                          loadingBuilder: (_, child, progress) =>
-                              progress == null ? child : const Center(child: CircularProgressIndicator(color: Colors.white)),
-                          errorBuilder: (_, __, ___) =>
-                              const Center(child: Icon(Icons.broken_image, color: Colors.white54, size: 40)),
-                        ),
+                        child: Image.asset(
+                            sliderImages[index],
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) =>
+                                const Center(child: Icon(Icons.broken_image, color: Colors.white54, size: 40)),
+                          ),
                       ),
                     ),
                   ),
