@@ -33,7 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
     {'icon': Icons.mic,           'label': 'Record',     'route': '/record',      'color': Color(0xFFAD1457)},
     //{'icon': Icons.block,         'label': 'Blacklist',  'route': '/blackbanana', 'color': Color(0xFF37474F)},
     {'icon': Icons.settings,      'label': 'Settings',   'route': '/settings',    'color': Color(0xFF558B2F)},
-    //{'icon': Icons.lock,          'label': 'Pin',        'route': '/pin',         'color': Color(0xFF6A1B9A)},
+    {'icon': Icons.security,      'label': 'Decoy App',  'route': '/decoy_settings', 'color': Color(0xFF6A1B9A)},
   ];
 
   @override

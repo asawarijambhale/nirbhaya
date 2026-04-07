@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:device_apps/device_apps.dart';
 import '../services/gallery_service.dart';
 
 class PinScreen extends StatefulWidget {
@@ -12,7 +14,7 @@ class _PinScreenState extends State<PinScreen> {
 
   final String correctPin = "1234";
 
-  void checkPin() {
+  Future<void> checkPin() async {
 
     String enteredPin = pinController.text;
 
@@ -21,14 +23,23 @@ class _PinScreenState extends State<PinScreen> {
       Navigator.pushReplacementNamed(context, '/home');
 
     } else {
+      final prefs = await SharedPreferences.getInstance();
+      final decoyPackage = prefs.getString('decoy_package');
+      
+      if (decoyPackage != null) {
+        bool installed = await DeviceApps.isAppInstalled(decoyPackage);
+        if (installed) {
+          DeviceApps.openApp(decoyPackage);
+          return;
+        }
+      }
 
-      openSystemGallery(); // open phone gallery
+      openSystemGallery(); // fallback to gallery
     }
   }
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
       appBar: AppBar(
         title: Text("Enter PIN"),

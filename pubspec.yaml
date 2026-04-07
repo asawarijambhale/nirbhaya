@@ -33,6 +33,7 @@ dependencies:
 
   google_maps_flutter: ^2.6.0
   location: ^6.0.2
+  
   share_plus: ^7.2.1
   camera: ^0.10.5+5
   flutter_sound: ^9.28.0
@@ -66,6 +67,9 @@ dependencies:
 
   # Phone number input with country picker
   intl_phone_field: ^3.2.0
+  device_apps: ^2.2.0
+  package_info_plus: ^9.0.1
+  flutter_dynamic_icon_plus: ^1.4.0
 
 dev_dependencies:
   flutter_test:
