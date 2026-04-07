@@ -171,6 +171,7 @@ import 'screens/blackbanana_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/complete_profile_screen.dart';
 import 'screens/pin_screen.dart';
+import 'screens/decoy_settings_screen.dart';
 import 'features/chatbot/services/gemini_client.dart';
 import 'features/chatbot/services/chat_service.dart';
 import 'features/panic_whisper/services/whisper_service.dart';
@@ -266,6 +267,7 @@ class NirbhayaApp extends StatelessWidget {
         '/settings':       (context) => const SettingsScreen(),
         '/completeProfile':(context) => const CompleteProfileScreen(),
         '/pin':            (context) => PinScreen(),
+        '/decoy_settings': (context) => const DecoySettingsScreen(),
       },
     );
   }
