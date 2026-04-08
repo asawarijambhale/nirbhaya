@@ -42,8 +42,17 @@ class _InputFieldState extends State<InputField> {
     final isSendEnabled = _hasText && !widget.isLoading;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4.0,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
       child: SafeArea(
         child: Row(
           children: [
@@ -65,8 +74,14 @@ class _InputFieldState extends State<InputField> {
                     borderRadius: BorderRadius.circular(24.0),
                     borderSide: const BorderSide(color: Color(0xFF101D68), width: 2.0),
                   ),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                  disabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24.0),
+                    borderSide: BorderSide(color: Colors.grey[200]!),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 12.0,
+                  ),
                   filled: true,
                   fillColor: widget.isLoading ? Colors.grey[100] : Colors.white,
                 ),
@@ -76,20 +91,12 @@ class _InputFieldState extends State<InputField> {
               ),
             ),
             const SizedBox(width: 8.0),
-            GestureDetector(
-              onTap: isSendEnabled ? _handleSend : null,
-              child: Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: isSendEnabled
-                        ? [const Color(0xFF3950C6), const Color(0xFF101D68)]
-                        : [Colors.grey[300]!, Colors.grey[400]!],
-                  ),
-                ),
-                child: const Icon(Icons.send, color: Colors.white),
-              ),
+            IconButton(
+              onPressed: isSendEnabled ? _handleSend : null,
+              icon: const Icon(Icons.send),
+              color: const Color(0xFF101D68),
+              disabledColor: Colors.grey[400],
+              iconSize: 28.0,
             ),
           ],
         ),

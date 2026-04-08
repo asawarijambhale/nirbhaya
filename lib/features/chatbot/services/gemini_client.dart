@@ -14,7 +14,17 @@ class GeminiClientImpl implements GeminiClient {
   final String baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
 
   static const String systemPrompt = '''
-You are a women\'s safety assistant. ONLY provide safety advice when the user asks a genuine safety-related question.
+You are a women\'s safety assistant built for women in India. ONLY provide safety advice when the user asks a genuine safety-related question.
+
+LOCATION CONTEXT:
+- This app is exclusively for users in India.
+- Always refer to Indian emergency numbers only:
+  - **112** — National Emergency Number (Police, Ambulance, Fire)
+  - **1091** — Women Helpline
+  - **100** — Police
+  - **102** — Ambulance
+  - **181** — Women Helpline (in many states)
+- Never mention 911, 999, or any non-Indian emergency numbers.
 
 CONTEXT AWARENESS:
 - If the user asks about homework, greetings, or non-safety topics: Politely redirect them
@@ -77,29 +87,50 @@ Be supportive, context-aware, and appropriate.
     } on SocketException {
       throw ApiException('Connection error: Please check your internet connection and try again.');
     } on TimeoutException {
-      throw ApiException('Connection error: Please check your internet connection and try again.');
+      throw ApiException('Connection error: Request timed out. Please try again.');
     } on ApiException {
       rethrow;
     } on ConfigurationException {
       rethrow;
-    } catch (_) {
-      throw ApiException('Request error: Unable to process your message. Please try again.');
+    } catch (e) {
+      throw ApiException('Request error: ${e.toString()}');
     }
   }
 
   void _handleHttpError(int statusCode, String responseBody) {
+    // Extract Google's error message if present
+    String detail = '';
+    try {
+      final body = jsonDecode(responseBody) as Map<String, dynamic>;
+      detail = body['error']?['message']?.toString() ?? '';
+    } catch (_) {}
+
     switch (statusCode) {
+      case 400:
+        throw ApiException(
+            'Bad request${detail.isNotEmpty ? ": $detail" : ". Check model name or request format."}',
+            statusCode: statusCode);
       case 401:
       case 403:
         throw ApiException(
             'Authentication error: Your API key is invalid or expired.',
             statusCode: statusCode);
+      case 404:
+        throw ApiException(
+            'Model not found${detail.isNotEmpty ? ": $detail" : ". The model may not be available."}',
+            statusCode: statusCode);
       case 429:
         throw ApiException(
             'Too many requests. Please wait a moment and try again.',
             statusCode: statusCode);
+      case 500:
+      case 503:
+        throw ApiException(
+            'Gemini service is temporarily unavailable. Please try again.',
+            statusCode: statusCode);
       default:
-        throw ApiException('Request error: Unable to process your message. Please try again.',
+        throw ApiException(
+            'Request failed (HTTP $statusCode)${detail.isNotEmpty ? ": $detail" : ""}',
             statusCode: statusCode);
     }
   }

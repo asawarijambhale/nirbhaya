@@ -25,40 +25,30 @@ class _ChatbotFeatureScreenState extends State<ChatbotFeatureScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Women Safety Assistant'),
+        title: const Text('Safety Assistant'),
         backgroundColor: const Color(0xFF101D68),
         foregroundColor: Colors.white,
-        centerTitle: true,
-        elevation: 4,
+        elevation: 2.0,
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF101D68), Color(0xFF3950C6)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: SafeArea(
-          child: Consumer<ChatService>(
-            builder: (context, chatService, child) {
-              return Column(
-                children: [
-                  Expanded(
-                    child: MessageList(
-                      messages: chatService.messages,
-                      isLoading: chatService.isLoading,
-                      errorMessage: chatService.errorMessage,
-                    ),
-                  ),
-                  InputField(
-                    onSend: (text) => chatService.sendMessage(text),
+      body: SafeArea(
+        child: Consumer<ChatService>(
+          builder: (context, chatService, child) {
+            return Column(
+              children: [
+                Expanded(
+                  child: MessageList(
+                    messages: chatService.messages,
                     isLoading: chatService.isLoading,
+                    errorMessage: chatService.errorMessage,
                   ),
-                ],
-              );
-            },
-          ),
+                ),
+                InputField(
+                  onSend: (text) => chatService.sendMessage(text),
+                  isLoading: chatService.isLoading,
+                ),
+              ],
+            );
+          },
         ),
       ),
     );

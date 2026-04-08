@@ -4,11 +4,15 @@ import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.location.Location
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.support.v4.media.session.PlaybackStateCompat
 import androidx.media.session.MediaButtonReceiver
 import android.support.v4.media.session.MediaSessionCompat
 import android.telephony.SmsManager
@@ -92,6 +96,8 @@ class VolumeSosForegroundService : Service() {
     private var lastTriggerTime = 0L
     private var mediaSession: MediaSessionCompat? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var audioFocusRequest: AudioFocusRequest? = null  // API 26+
+    private val audioManager by lazy { getSystemService(AUDIO_SERVICE) as AudioManager }
 
     private val fusedLocationClient by lazy {
         LocationServices.getFusedLocationProviderClient(this)
@@ -180,6 +186,7 @@ class VolumeSosForegroundService : Service() {
     private fun releaseAll() {
         releaseMediaSession()
         releaseWakeLock()
+        abandonAudioFocus()
     }
 
     // ── Enabled check ─────────────────────────────────────────────────────
@@ -215,19 +222,92 @@ class VolumeSosForegroundService : Service() {
         }
     }
 
+    // ── Audio Focus ───────────────────────────────────────────────────────
+    //
+    // CRITICAL for background detection.
+    // Android only routes volume key events to the MediaSession that currently
+    // holds audio focus. Without requesting focus, any other app that played
+    // audio last (YouTube, Spotify, etc.) keeps the focus and our session
+    // never receives the key events when the app is in the background.
+    //
+    // We request AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK so we don't interrupt
+    // actual media playback — we just need the routing, not the audio stream.
+
+    private fun requestAudioFocus() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val attrs = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                .build()
+            audioFocusRequest = AudioFocusRequest.Builder(
+                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+            )
+                .setAudioAttributes(attrs)
+                .setOnAudioFocusChangeListener { /* no-op — we don't play audio */ }
+                .build()
+            audioManager.requestAudioFocus(audioFocusRequest!!)
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.requestAudioFocus(
+                { /* no-op */ },
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+            )
+        }
+        Log.d(TAG, "Audio focus requested")
+    }
+
+    private fun abandonAudioFocus() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.abandonAudioFocus(null)
+            }
+            Log.d(TAG, "Audio focus abandoned")
+        } catch (e: Exception) {
+            Log.w(TAG, "abandonAudioFocus error: ${e.message}")
+        }
+    }
+
     // ── MediaSession ──────────────────────────────────────────────────────
     //
-    // Android's AudioManager routes hardware key events to the active
-    // MediaSession. FLAG_HANDLES_MEDIA_BUTTONS makes this session the
-    // target for KEYCODE_VOLUME_UP / KEYCODE_VOLUME_DOWN in all states:
-    // foreground, background, locked screen, screen-off.
+    // Three things are required for background volume key routing:
+    //
+    //  1. FLAG_HANDLES_MEDIA_BUTTONS — registers session as a media button target
+    //  2. setPlaybackState(PLAYING) — Android only routes events to sessions
+    //     with an active playback state. A session with no state or STATE_NONE
+    //     is silently skipped even if isActive = true.
+    //  3. Audio focus — Android routes volume keys to the focus holder.
+    //     Without this, background apps lose routing to any other audio app.
 
     private fun initMediaSession() {
+        requestAudioFocus()
+
         mediaSession = MediaSessionCompat(this, "NirbhayaVolumeSOS").apply {
             setFlags(
                 MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS or
                 MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS
             )
+
+            // Set a fake PLAYING state — required for Android to route
+            // media button events to this session in background/locked states.
+            setPlaybackState(
+                PlaybackStateCompat.Builder()
+                    .setState(
+                        PlaybackStateCompat.STATE_PLAYING,
+                        PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN,
+                        0f  // playback speed 0 — we're not actually playing anything
+                    )
+                    .setActions(
+                        PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                        PlaybackStateCompat.ACTION_PLAY or
+                        PlaybackStateCompat.ACTION_PAUSE
+                    )
+                    .build()
+            )
+
             setCallback(object : MediaSessionCompat.Callback() {
                 override fun onMediaButtonEvent(mediaButtonEvent: Intent): Boolean {
                     val keyEvent: KeyEvent? =
@@ -258,9 +338,10 @@ class VolumeSosForegroundService : Service() {
                     }
                 }
             })
+
             isActive = true
         }
-        Log.d(TAG, "MediaSession initialized and active")
+        Log.d(TAG, "MediaSession initialized — active with PLAYING state")
     }
 
     private fun releaseMediaSession() {
