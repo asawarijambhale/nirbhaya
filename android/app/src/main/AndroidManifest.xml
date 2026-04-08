@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ── Existing permissions ─────────────────────────────────────────── -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
@@ -7,48 +9,41 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
     <uses-permission android:name="android.permission.CAMERA"/>
-<uses-permission android:name="android.permission.SEND_SMS"/>
-<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
-<uses-permission android:name="android.permission.CALL_PHONE"/>
-<uses-permission android:name="android.permission.RECORD_AUDIO"/>
-<uses-permission android:name="android.permission.READ_PHONE_STATE"/>
-<queries>
+    <uses-permission android:name="android.permission.SEND_SMS"/>
+    <uses-permission android:name="android.permission.CALL_PHONE"/>
+    <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
 
-    <!-- For SMS -->
-    <intent>
-        <action android:name="android.intent.action.SENDTO" />
-        <data android:scheme="sms" />
-    </intent>
+    <!-- ── Volume SOS additions ──────────────────────────────────────────── -->
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+    <!-- Needed for MediaSession to receive hardware media/volume button events -->
+    <uses-permission android:name="android.permission.MEDIA_CONTENT_CONTROL"/>
 
-    <!-- For CALL -->
-    <intent>
-        <action android:name="android.intent.action.DIAL" />
-        <data android:scheme="tel" />
-    </intent>
-
-    <!-- For decoy "open gallery" intents -->
-    <intent>
-        <action android:name="android.intent.action.PICK" />
-        <data android:mimeType="image/*" />
-    </intent>
-    <intent>
-        <action android:name="android.intent.action.VIEW" />
-        <data android:mimeType="image/*" />
-    </intent>
-
-    <!-- If explicitly targeting Google Photos fallback -->
-    <package android:name="com.google.android.apps.photos" />
-
-</queries>
-
-
-
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.SENDTO"/>
+            <data android:scheme="sms"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.DIAL"/>
+            <data android:scheme="tel"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.PICK"/>
+            <data android:mimeType="image/*"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:mimeType="image/*"/>
+        </intent>
+        <package android:name="com.google.android.apps.photos"/>
+    </queries>
 
     <application
         android:label="nirbhaya"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
-       
 
         <activity
             android:name=".MainActivity"
@@ -60,13 +55,12 @@
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
             <meta-data
-              android:name="io.flutter.embedding.android.NormalTheme"
-              android:resource="@style/NormalTheme"
-              />
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme"/>
         </activity>
 
         <activity-alias
@@ -77,11 +71,10 @@
             android:label="Nirbhaya"
             android:targetActivity=".MainActivity">
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity-alias>
-
 
         <activity-alias
             android:name=".Calculator"
@@ -91,8 +84,8 @@
             android:label="Calculator"
             android:targetActivity=".MainActivity">
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity-alias>
 
@@ -104,8 +97,8 @@
             android:label="Notes"
             android:targetActivity=".MainActivity">
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity-alias>
 
@@ -117,36 +110,73 @@
             android:label="Calendar"
             android:targetActivity=".MainActivity">
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity-alias>
 
-        <!-- Panic Whisper Detection foreground service -->
+        <!-- ── Foreground service: Panic Whisper (codeword detection) ──────── -->
         <service
             android:name=".WhisperForegroundService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="microphone|location" />
+            android:foregroundServiceType="microphone|location"/>
 
-        <!-- Don't delete the meta-data below.
-             This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
+        <!-- ── Foreground service: Volume Button SOS ─────────────────────── -->
+        <service
+            android:name=".VolumeSosForegroundService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="location">
+            <!-- Required so MediaButtonReceiver knows which service to start
+                 when a hardware key event arrives on the lock screen -->
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON"/>
+            </intent-filter>
+        </service>
+
+        <!-- ── Boot receiver — restarts service after reboot ─────────────── -->
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter android:priority="999">
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <!-- HTC devices -->
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
+
+        <!-- ── MediaButton receiver ───────────────────────────────────────────
+             Routes hardware volume/media key events to VolumeSosForegroundService
+             via MediaSession when the screen is locked or the app is in background.
+             The service tag inside the receiver tells Android exactly which
+             service owns the active MediaSession. Without this, lock-screen
+             key routing is unreliable on many OEMs. ──────────────────────── -->
+        <receiver
+            android:name="androidx.media.session.MediaButtonReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON"/>
+            </intent-filter>
+        </receiver>
+
         <meta-data
             android:name="flutterEmbedding"
-            android:value="2" />
-            <meta-data
-    android:name="com.google.android.geo.API_KEY"
-    android:value="AIzaSyDvJb9PUBsHUPI4lH9PexxysbszQoNrgJ0"/>
-    </application>
-    <!-- Required to query activities that can process text, see:
-         https://developer.android.com/training/package-visibility and
-         https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.
+            android:value="2"/>
 
-         In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyDvJb9PUBsHUPI4lH9PexxysbszQoNrgJ0"/>
+
+    </application>
+
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
     </queries>
+
 </manifest>

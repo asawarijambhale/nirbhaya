@@ -175,6 +175,7 @@ import 'screens/decoy_settings_screen.dart';
 import 'features/chatbot/services/gemini_client.dart';
 import 'features/chatbot/services/chat_service.dart';
 import 'features/panic_whisper/services/whisper_service.dart';
+import 'features/volume_sos/services/volume_sos_service.dart';
 import 'features/danger_alert/services/danger_prediction_service.dart';
 import 'features/danger_alert/widgets/danger_alert_banner.dart';
 import 'features/eye_gesture_sos/services/eye_gesture_service.dart';
@@ -200,6 +201,9 @@ void main() async {
   );
 
   await WhisperService().init();
+
+  final volumeSosService = VolumeSosService();
+  await volumeSosService.init();
 
   final dangerService = DangerPredictionService();
   await dangerService.init();
@@ -227,6 +231,7 @@ void main() async {
         ChangeNotifierProvider<DangerPredictionService>.value(value: dangerService),
         ChangeNotifierProvider<EyeGestureService>.value(value: eyeGestureService),
         ChangeNotifierProvider<SafetyModeManager>.value(value: safetyModeManager),
+        ChangeNotifierProvider<VolumeSosService>.value(value: volumeSosService),
       ],
       child: NirbhayaApp(
         initialRoute: loggedIn

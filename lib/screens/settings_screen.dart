@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../features/panic_whisper/panic_whisper_settings.dart';
 import '../features/danger_alert/danger_alert_settings.dart';
 import '../features/eye_gesture_sos/eye_gesture_settings.dart';
+import '../features/volume_sos/volume_sos_settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -90,6 +91,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             // ── Panic Whisper Detection ──────────────────────────────────
             const PanicWhisperSettings(),
+
+            // ── Volume Button SOS ─────────────────────────────────────────
+            const VolumeSosSettings(),
 
             // ── Predictive Danger Alerts ─────────────────────────────────
             const DangerAlertSettings(),

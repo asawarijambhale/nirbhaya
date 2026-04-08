@@ -88,7 +88,7 @@ class WhisperService extends ChangeNotifier {
   }
 
   /// Called by native when keyword is detected.
-  /// Triggers the same SOS pipeline used by the SOS screen.
+  /// Volume SOS triggers are handled separately by [VolumeSosService].
   Future<dynamic> _handleNativeCall(MethodCall call) async {
     if (call.method != 'onKeywordDetected') return;
 
@@ -105,10 +105,7 @@ class WhisperService extends ChangeNotifier {
       final contacts = await _sosService.getEmergencyContacts().first;
       final userName = await _sosService.getUserName();
       if (contacts.isNotEmpty) {
-        await _sosService.triggerSOSAlert(
-          contacts: contacts,
-          userName: userName,
-        );
+        await _sosService.triggerSOSAlert(contacts: contacts, userName: userName);
       } else {
         debugPrint('[WhisperService] No emergency contacts configured');
       }
